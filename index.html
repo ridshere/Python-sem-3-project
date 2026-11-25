@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Appointment Booking System</title>
+<style>
+  :root { --bg:#f4f6fb; --card:#fff; --text:#1f2937; --muted:#6b7280; --primary:#4f46e5;
+          --border:#e5e7eb; --danger:#dc2626; --ok:#16a34a; --soon:#fef3c7; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111827; --card:#1f2937; --text:#f3f4f6; --muted:#9ca3af; --border:#374151; --soon:#4a3b0a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--primary); color:#fff; padding:20px 16px; text-align:center; }
+  header h1 { margin:0; font-size:1.5rem; }
+  main { max-width:960px; margin:24px auto; padding:0 16px; display:grid; gap:24px; grid-template-columns:1fr; }
+  @media (min-width:820px) { main { grid-template-columns: 340px 1fr; align-items:start; } }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
+  h2 { margin:0 0 14px; font-size:1.1rem; }
+  label { display:block; font-size:.85rem; color:var(--muted); margin:10px 0 4px; }
+  input { width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:1rem;
+          background:var(--bg); color:var(--text); }
+  button { cursor:pointer; border:0; border-radius:8px; padding:10px 14px; font-size:.9rem; font-weight:600; }
+  .primary { background:var(--primary); color:#fff; width:100%; margin-top:16px; }
+  .danger { background:transparent; color:var(--danger); border:1px solid var(--danger); }
+  .secondary { background:transparent; color:var(--primary); border:1px solid var(--primary); }
+  .flash { padding:10px 14px; border-radius:8px; margin-bottom:12px; font-size:.9rem; }
+  .flash.success { background:#dcfce7; color:#166534; }
+  .flash.error { background:#fee2e2; color:#991b1b; }
+  .toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .toolbar a { color:var(--primary); font-size:.9rem; text-decoration:none; }
+  .appt { border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; }
+  .appt.soon { background:var(--soon); border-color:#f59e0b; }
+  .appt.past { opacity:.55; }
+  .appt .when { font-weight:700; }
+  .appt .meta { color:var(--muted); font-size:.9rem; margin:4px 0 10px; }
+  .badge { background:#f59e0b; color:#fff; font-size:.7rem; padding:2px 8px; border-radius:99px; margin-left:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .actions form { display:flex; gap:8px; align-items:center; margin:0; }
+  .actions input { width:auto; padding:6px; font-size:.85rem; }
+  .empty { color:var(--muted); text-align:center; padding:24px 0; }
+  #toasts { position:fixed; top:16px; right:16px; display:grid; gap:10px; z-index:10; max-width:320px; }
+  .toast { background:#f59e0b; color:#1f2937; padding:12px 14px; border-radius:10px; box-shadow:0 4px 14px rgba(0,0,0,.25);
+           font-size:.9rem; }
+</style>
+</head>
+<body>
+<header><h1>Appointment Booking System</h1></header>
+<div id="toasts"></div>
+
+<main>
+  <section class="card">
+    <h2>Book an appointment</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, msg in messages %}<div class="flash {{ category }}">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    <form method="post" action="{{ url_for('book') }}">
+      <label for="name">Your name</label>
+      <input id="name" name="name" required>
+      <label for="phone">Phone number</label>
+      <input id="phone" name="phone" type="tel" required>
+      <label for="purpose">Purpose of visit</label>
+      <input id="purpose" name="purpose">
+      <label for="start">Date &amp; time</label>
+      <input id="start" name="start" type="datetime-local" min="{{ min_dt }}" required>
+      <button class="primary" type="submit">Book appointment</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="toolbar">
+      <h2 style="margin:0">{{ 'All appointments' if show_all else 'Upcoming appointments' }}</h2>
+      {% if show_all %}<a href="{{ url_for('index') }}">Show upcoming only</a>
+      {% else %}<a href="{{ url_for('index', all=1) }}">Show all</a>{% endif %}
+    </div>
+
+    {% for a in appointments %}
+    <div class="appt {{ 'soon' if a.is_soon }} {{ 'past' if a.is_past }}">
+      <div class="when">{{ a.start_text }}{% if a.is_soon %}<span class="badge">Starting soon</span>{% endif %}</div>
+      <div class="meta">{{ a.name }} &middot; {{ a.phone }}{% if a.purpose %} &middot; {{ a.purpose }}{% endif %}</div>
+      <div class="actions">
+        <form method="post" action="{{ url_for('reschedule', appt_id=a.id) }}">
+          <input type="datetime-local" name="start" value="{{ a.start_input }}" min="{{ min_dt }}" required>
+          <button class="secondary" type="submit">Reschedule</button>
+        </form>
+        <form method="post" action="{{ url_for('cancel', appt_id=a.id) }}"
+              onsubmit="return confirm('Cancel this appointment?')">
+          <button class="danger" type="submit">Cancel</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+      <div class="empty">No appointments yet. Book your first one!</div>
+    {% endfor %}
+  </section>
+</main>
+
+<script>
+  // Ask once for permission to show desktop notifications
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+
+  function showToast(text) {
+    const box = document.getElementById("toasts");
+    const t = document.createElement("div");
+    t.className = "toast";
+    t.textContent = text;
+    box.appendChild(t);
+    setTimeout(() => t.remove(), 15000);
+  }
+
+  async function checkReminders() {
+    try {
+      const res = await fetch("/api/reminders");
+      const items = await res.json();
+      items.forEach(a => {
+        const msg = "Reminder: " + a.name + " has an appointment at " + a.time +
+                    " (in about " + a.minutes + " min)" + (a.purpose ? " - " + a.purpose : "");
+        showToast(msg);
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("Appointment reminder", { body: msg });
+        }
+      });
+      if (items.length) setTimeout(() => location.reload(), 2000); // refresh "Starting soon" badges
+    } catch (e) { /* server not reachable, try again later */ }
+  }
+
+  checkReminders();
+  setInterval(checkReminders, 30000);
+</script>
+</body>
+</html>
